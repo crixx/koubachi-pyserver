@@ -119,3 +119,7 @@ Run tests:
 ```bash
 pipenv run pytest
 ```
+
+## Use this server with Firebase
+
+    pipenv install firebase-admin

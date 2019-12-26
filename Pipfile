@@ -11,6 +11,7 @@ flask = "*"
 pyyaml = "*"
 paho-mqtt = "*"
 cryptography = "*"
+firebase-admin = "*"
 
 [dev-packages]
 mypy = "*"

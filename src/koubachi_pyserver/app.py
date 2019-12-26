@@ -11,6 +11,10 @@ import paho.mqtt.publish as publish
 from koubachi_pyserver.crypto import decrypt, encrypt
 from koubachi_pyserver.sensors import Sensor, SENSORS
 
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
+
 CONFIG_FILE = "config.yml"
 
 # The sensor only accepts HTTP/1.1
@@ -19,7 +23,6 @@ BaseHTTPRequestHandler.protocol_version = 'HTTP/1.1'
 CONTENT_TYPE = "application/x-koubachi-aes-encrypted"
 
 app = Flask(__name__)
-
 
 class RawReading(NamedTuple):
     timestamp: int
@@ -35,13 +38,13 @@ class Reading(NamedTuple):
 
 
 def get_device_key(mac_address: str) -> bytes:
-    return bytes.fromhex(app.config['devices'][mac_address]['key'])
+        return bytes.fromhex(app.config['devices'][mac_address]['key'])
 
 
 def get_device_calibration_parameters(mac_address: str) -> Mapping[str, float]:
-    calibration_parameters = app.config['devices'][mac_address]['calibration_parameters']
-    assert isinstance(calibration_parameters, dict)
-    return calibration_parameters
+        calibration_parameters = app.config['devices'][mac_address]['calibration_parameters']
+        assert isinstance(calibration_parameters, dict)
+        return calibration_parameters
 
 
 def get_device_config(_mac_address: str) -> str:
@@ -93,6 +96,8 @@ def handle_readings(mac_address: str, readings: Iterable[Reading]) -> None:
     output: Dict[str, str] = app.config['output']
     if output['type'] == 'csv_files':
         write_to_csv(mac_address, readings, directory=output['directory'])
+    elif output['type'] == 'firebase':
+        post_to_firebase_realtime_db(mac_address, readings)
     elif output['type'] == 'thingsboard_mqtt':
         cfg = get_mqtt_config(output)
         post_to_thingsboard_mqtt(mac_address, readings, **cfg)
@@ -144,6 +149,10 @@ def post_to_latestvals_mqtt(readings: Iterable[Reading],
             mqtt_payload[reading.sensor_type] = reading.value
         publish.single(payload=json.dumps(mqtt_payload), **kwargs)
 
+def post_to_firebase_realtime_db(mac_address: str, readings: Iterable[Reading]) -> None:
+    ref = db.reference('readings/'+mac_address)
+    for reading in readings:
+        ref.child(reading.sensor_type).child(str(reading.timestamp)).set({"v":reading.value, "r":reading.raw_value})
 
 @app.route('/v1/smart_devices/<mac_address>', methods=['PUT'])
 def connect(mac_address: str) -> Response:
@@ -173,6 +182,10 @@ def add_readings(mac_address: str) -> Response:
     response_enc = encrypt(key, bytes(response, encoding='utf-8'))
     return Response(response_enc, status=201, content_type=CONTENT_TYPE)
 
+@app.route('/v1/smart_devices/<mac_address>/readings', methods=['GET'])
+def get_readings(mac_address: str) -> Response:
+    data = db.reference('readings/'+mac_address).get()
+    return Response(response=json.dumps(data), status=200, content_type='application/json')
 
 def main() -> None:
     app.config['last_config_change'] = os.path.getmtime(CONFIG_FILE)
@@ -180,6 +193,11 @@ def main() -> None:
         config = yaml.safe_load(f.read())
     for cfg in ['output', 'devices']:
         app.config[cfg] = config[cfg]
+
+    if app.config['output']['type'] == 'firebase':
+        cred = credentials.Certificate(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+        firebase_admin.initialize_app(cred, { "databaseURL": os.environ["FIREBASE_DATABASE_URL"]})
+
     app.run(host='0.0.0.0', port=8005)
 
 
