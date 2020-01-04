@@ -14,6 +14,8 @@ from koubachi_pyserver.sensors import Sensor, SENSORS
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+from threading import Thread
+
 
 CONFIG_FILE = "config.yml"
 
@@ -97,7 +99,8 @@ def handle_readings(mac_address: str, readings: Iterable[Reading]) -> None:
     if output['type'] == 'csv_files':
         write_to_csv(mac_address, readings, directory=output['directory'])
     elif output['type'] == 'firebase':
-        post_to_firebase_realtime_db(mac_address, readings)
+        thread = Thread(target=post_to_firebase_realtime_db, kwargs=dict(mac_address = mac_address, readings = readings))
+        thread.start()        
     elif output['type'] == 'thingsboard_mqtt':
         cfg = get_mqtt_config(output)
         post_to_thingsboard_mqtt(mac_address, readings, **cfg)

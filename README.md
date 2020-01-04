@@ -120,6 +120,23 @@ Run tests:
 pipenv run pytest
 ```
 
-## Use this server with Firebase
+# Use this server with Firebase
+Pyserver can be used to save the data to the firebase realtime-database.
 
+To enable firebase, you need to install the firebase admin sdk:
     pipenv install firebase-admin
+
+Now you can simply enable firebase in the `config.yml`
+
+In order to provide the credentials for firebase, provide the following environment variables (you can add them to the `.env` file):
+- `GOOGLE_APPLICATION_CREDENTIALS` e.g. `GOOGLE_APPLICATION_CREDENTIALS="/home/pi/.firebase/service-account-file.json"`
+- `FIREBASE_DATABASE_URL` e.g. `FIREBASE_DATABASE_URL="https://project-id.firebaseio.com"`
+
+# Use systemd to run pyserver on reboot
+Taken from: [RaspberryPi Docs](https://www.raspberrypi.org/documentation/linux/usage/systemd.md)
+
+- adjust `koubachi-pyserver.service` file to correct paths
+- copy this file into /etc/systemd/system as root `sudo cp koubachi-pyserver.service /etc/systemd/system/koubachi-pyserver.service`
+- start service: `sudo systemctl start koubachi-pyserver.service`
+- stop service: `sudo systemctl stop koubachi-pyserver.service`
+- When you are happy that this starts and stops your app, you can have it start automatically on reboot by using this command: `sudo systemctl enable koubachi-pyserver.service`
